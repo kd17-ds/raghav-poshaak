@@ -1,0 +1,258 @@
+@import url("https://fonts.googleapis.com/css2?family=Tsukimi+Rounded:wght@300;400;500;600;700&display=swap");
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Tsukimi Rounded", sans-serif;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background-color: #f0f0f0;
+}
+.Navbar {
+  position: sticky;
+  top: 0px;
+  left: 0px;
+  width: 100%;
+  height: 64px;
+  background-color: white;
+  padding: 16px;
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+.logo img {
+  display: flex;
+  align-items: center;
+  width: 140px;
+}
+.navlinks {
+  color: rgb(0, 0, 0);
+  font-size: 18px;
+  display: flex;
+  gap: 30px;
+}
+.navlinks a {
+  color: rgb(0, 0, 0);
+  text-decoration: none;
+}
+.navlinks :hover {
+  cursor: pointer;
+  color: blue;
+}
+.menu {
+  display: none;
+}
+.about {
+  display: flex;
+  align-items: center;
+  gap: 100px;
+  width: 100%;
+  padding: 30px;
+  background-color: #f0f0f0;
+  margin-top: 30px;
+  line-height: 1.8;
+}
+.profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile img {
+  width: 420px;
+  border-radius: 20px;
+}
+.details {
+  padding: 20px;
+  border-radius: 20px;
+  text-align: center;
+  color: rgb(0, 0, 0);
+}
+.details h1 {
+  font-size: 50px;
+}
+.details h2 {
+  font-size: 30px;
+}
+.Subtitles {
+  margin: 30px;
+  text-align: center;
+  font-size: 40px;
+}
+.shopdetails {
+  padding: 15px;
+  display: flex;
+  gap: 140px;
+  justify-content: center;
+  margin-top: 20px;
+  width: 100%;
+}
+.shlok {
+  text-align: center;
+  margin: 40px;
+}
+.shopinfo {
+  text-align: left;
+  margin-left: 50px;
+  font-size: 17px;
+  line-height: 1.8;
+}
+.shopimg {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 30px;
+  padding: 10px;
+  text-align: center;
+}
+.shopcard {
+  border-radius: 20px;
+}
+
+.shopcard img {
+  width: 100%;
+  border-radius: 20px;
+}
+.shopcard p {
+  font-size: 13px;
+  margin: 9px;
+}
+.products {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 60px;
+  gap: 40px;
+}
+.card {
+  text-align: left;
+  border-radius: 20px;
+  padding: 16px;
+  line-height: 1.8;
+  background-color: white;
+}
+.card img {
+  width: 100%;
+  border-radius: 20px;
+}
+.card p {
+  margin-top: 15px;
+}
+.contact {
+  text-align: center;
+  line-height: 1.8;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 30px;
+  padding: 20px;
+}
+.contactcard {
+  text-align: center;
+  border-radius: 20px;
+}
+.contactcard img {
+  width: 40%;
+  border-radius: 30px;
+}
+.Ending {
+  color: #000000;
+  font-size: 50px;
+  text-align: center;
+  margin-top: 20px;
+}
+.End {
+  color: #000000;
+  text-align: center;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+/* For tablet view */
+@media only screen and (max-width: 992px) {
+  .about {
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+  }
+  .profile img {
+    width: 45%;
+  }
+  .details {
+    padding: 5px;
+  }
+  .shopdetails {
+    flex-direction: column-reverse;
+    gap: 20px;
+  }
+  .shopinfo {
+    text-align: center;
+    font-size: 16px;
+    margin: 0;
+  }
+  .shopcard img {
+    width: 75%;
+  }
+  .products {
+    grid-template-columns: repeat(2, 1fr);
+    padding: 30px;
+    gap: 30px;
+  }
+  .contact {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .contactcard img {
+    width: 30%;
+  }
+}
+/* For Mobile view */
+@media only screen and (max-width: 536px) {
+  .Navbar {
+    padding: 8px;
+  }
+  .logo img {
+    width: 125px;
+  }
+  .navlinks {
+    position: absolute;
+    top: 64px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    background-color: #f0f0f0;
+    padding: 16px;
+  }
+  .hide {
+    display: none;
+  }
+  .menu {
+    display: block;
+  }
+  .profile img {
+    width: 95%;
+  }
+  .details {
+    padding: 10px;
+  }
+  .details h1 {
+    font-size: 35px;
+  }
+  .details h2 {
+    font-size: 21px;
+  }
+  .Subtitles {
+    font-size: 30px;
+  }
+  .shopimg {
+    grid-template-columns: repeat(1, 1fr);
+    gap: 20px;
+  }
+  .products {
+    grid-template-columns: repeat(1, 1fr);
+    padding: 16px;
+    gap: 20px;
+  }
+  .contactcard img {
+    width: 40%;
+  }
+}
