@@ -1,23 +1,28 @@
 import { FaShoppingCart } from "react-icons/fa";
-import { motion } from "framer-motion";
+import { motion } from "framer-motion"; // Animations
 
 export default function Navbar() {
+
+    // Left side links
     const leftLinks = [
         { name: "Poshaks", link: "/poshaks" },
         { name: "Sarees", link: "/sarees" },
-        { name: "Trending", link: "/trending" },
+        { name: "Kurtis", link: "/kurtis" },
         { name: "Accessories", link: "/accessories" },
     ];
 
+    // Right side links
     const rightLinks = [
         { name: "Our Story", link: "/our-story" },
         { name: "Contact Us", link: "/contact" },
     ];
 
     const isLoggedIn = true;
-    const userInitial = "D";
+    const userInitial = "D"; // to be changed after implementing auth
 
     return (
+
+        // Navbar animation 
         <motion.nav
             initial={{ y: -80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
