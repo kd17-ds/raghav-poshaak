@@ -10,6 +10,7 @@ const dbUrl = process.env.MONGO_URL;
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const authRoutes = require("./routes/AuthRoutes");
 
 app.use(express.static(path.join(__dirname, "client", "dist")));
 app.set("trust proxy", 1);
@@ -29,6 +30,8 @@ app.use(cookieParser());
 app.get(/^\/(?!api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
+
+app.use("/api/auth", authRoutes);
 
 main()
   .then((res) => {

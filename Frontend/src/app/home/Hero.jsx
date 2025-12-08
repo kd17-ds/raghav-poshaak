@@ -5,6 +5,27 @@ import { useRouter } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import { motion } from "framer-motion";
 
+// Motion variants (entrance-only)
+const headingV = {
+    hidden: { y: -32, opacity: 0 },
+    show: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 90, damping: 16 } },
+};
+
+const taglineV = {
+    hidden: { y: 24, opacity: 0 },
+    show: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 90, damping: 16, delay: 0.04 } },
+};
+
+const iconsContainerV = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.06, delayChildren: 0.16 } },
+};
+
+const iconV = {
+    hidden: { y: 18, opacity: 0, scale: 0.98 },
+    show: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.36, ease: "easeOut" } },
+};
+
 export default function Hero() {
     const router = useRouter();
 
@@ -27,26 +48,7 @@ export default function Hero() {
 
     const preventDrag = useCallback((e) => e.preventDefault(), []);
 
-    // Motion variants (entrance-only)
-    const headingV = {
-        hidden: { y: -32, opacity: 0 },
-        show: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 90, damping: 16 } },
-    };
 
-    const taglineV = {
-        hidden: { y: 24, opacity: 0 },
-        show: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 90, damping: 16, delay: 0.04 } },
-    };
-
-    const iconsContainerV = {
-        hidden: {},
-        show: { transition: { staggerChildren: 0.06, delayChildren: 0.16 } },
-    };
-
-    const iconV = {
-        hidden: { y: 18, opacity: 0, scale: 0.98 },
-        show: { y: 0, opacity: 1, scale: 1, transition: { duration: 0.36, ease: "easeOut" } },
-    };
 
     // slider resize correctly when the browser window size changes
     useEffect(() => {
@@ -59,7 +61,7 @@ export default function Hero() {
     return (
         <section className="w-full h-full px-6 lg:px-12">
             {/* header row */}
-            <div className="flex justify-between items-center mb-16 lg:mb-20">
+            <div className="flex justify-between items-center mb-16 lg:mb-28">
                 <motion.h1
                     variants={headingV}
                     initial="hidden"

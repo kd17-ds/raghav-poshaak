@@ -3,7 +3,8 @@ import Navbar from "@/app/components/Navbar";
 
 export const metadata = {
   title: "Raghav Poshaak",
-  description: "Raghav Poshak store",
+  description:
+    "Your go-to destination for divine clothing and traditional fashion.",
 };
 
 export default function RootLayout({ children }) {
