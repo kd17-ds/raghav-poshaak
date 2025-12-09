@@ -2,25 +2,46 @@ const User = require("../models/UserModel");
 const Token = require("../models/TokenModel");
 const sendRes = require("../utils/sendRes");
 const crypto = require("crypto");
+const { generateSecretToken } = require("../utils/secretToken");
 const sendVerificationEmail = require("../utils/sendVerificationEmail");
+const forgotPassEmail = require("../utils/forgotPassEmail");
+const { validatePassword } = require("../utils/validators");
 
 // Registration Controller
 module.exports.SignUp = async (req, res) => {
   try {
-    const { username, email, password, phone, name } = req.body;
+    let { username, email, password, phone, name } = req.body;
 
     if (!username || !email || !password || !name) {
       return sendRes(res, 400, false, "All required fields are not provided");
     }
 
+    if (email) email = email.toLowerCase().trim();
+    if (username) username = username.trim();
+
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.ok) {
+      return sendRes(res, 400, false, pwCheck.reason);
+    }
+
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
-      return sendRes(res, 400, false, "User already exists with this email");
+      return sendRes(
+        res,
+        400,
+        false,
+        "An account already exists with this email."
+      );
     }
 
     const existingUsername = await User.findOne({ username });
     if (existingUsername) {
-      return sendRes(res, 400, false, "Username already taken");
+      return sendRes(
+        res,
+        400,
+        false,
+        "This username is already taken. Try another one."
+      );
     }
 
     const newUser = await User.create({
@@ -65,7 +86,7 @@ module.exports.SignUp = async (req, res) => {
       res,
       201,
       true,
-      "User registered successfully. Please verify your email.",
+      "Registration successful. A verification email has been sent — please check your inbox.",
       {
         userId: newUser._id,
       }
@@ -149,14 +170,27 @@ module.exports.verifyEmail = async (req, res) => {
 // Resend Verification Email Controller
 module.exports.resendVerification = async (req, res) => {
   try {
-    const { email } = req.body;
+    let { email } = req.body;
     if (!email) return sendRes(res, 400, false, "Email required.");
 
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return sendRes(res, 404, false, "User not found.");
+    if (email) email = email.toLowerCase().trim();
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return sendRes(
+        res,
+        200,
+        true,
+        "If an account exists for this email, a verification link has been sent. Please check your inbox."
+      );
 
     if (user.isVerified)
-      return sendRes(res, 400, false, "User already verified.");
+      return sendRes(
+        res,
+        400,
+        false,
+        "Your email is already verified. You may log in"
+      );
 
     // Cooldown: only allow a resend every 3 minutes
     const recent = await Token.findOne({
@@ -202,11 +236,468 @@ module.exports.resendVerification = async (req, res) => {
       );
     }
 
-    return sendRes(res, 200, true, "Verification email sent.", {
-      userId: user._id,
-    });
+    return sendRes(
+      res,
+      200,
+      true,
+      "If an account exists for this email, a verification link has been sent. Please check your inbox.",
+      {
+        userId: user._id,
+      }
+    );
   } catch (error) {
     console.error("resendVerification error:", error);
     return sendRes(res, 500, false, "Internal server error");
+  }
+};
+
+// Login Controller
+module.exports.Login = async (req, res) => {
+  try {
+    let { username, email, password } = req.body;
+
+    if (!password || (!username && !email)) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "Password and either username or email are required."
+      );
+    }
+
+    if (email) email = email.toLowerCase().trim();
+    if (username) username = username.trim();
+
+    const query = email ? { email } : { username };
+    const user = await User.findOne(query);
+
+    if (!user) {
+      return sendRes(res, 401, false, "Invalid credentials.");
+    }
+
+    if (!user.isVerified) {
+      return sendRes(
+        res,
+        403,
+        false,
+        "Email not verified. Please verify your email to continue."
+      );
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return sendRes(res, 401, false, "Invalid credentials.");
+    }
+
+    const token = generateSecretToken({ userId: user._id });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    return sendRes(res, 200, true, "Login successful.", {
+      user: {
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return sendRes(res, 500, false, "Internal server error");
+  }
+};
+
+// Forgot Password Controller
+module.exports.ForgotPass = async (req, res) => {
+  let { email, username } = req.body;
+  try {
+    if (!email && !username) {
+      return sendRes(res, 400, false, "Either email or username is required.");
+    }
+
+    if (email) email = String(email).toLowerCase().trim();
+    if (username) username = String(username).trim();
+
+    const query = email ? { email } : { username };
+
+    const user = await User.findOne(query);
+    if (!user) {
+      return sendRes(
+        res,
+        200,
+        true,
+        "If an account exists for the provided details, a reset link has been sent to the registered email."
+      );
+    }
+
+    const recent = await Token.findOne({
+      userId: user._id,
+      type: "password_reset",
+      createdAt: { $gt: new Date(Date.now() - 3 * 60 * 1000) },
+    });
+
+    if (recent) {
+      return sendRes(
+        res,
+        429,
+        false,
+        "A password reset link was sent recently. Please try again after 3 minutes."
+      );
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    await Token.create({
+      userId: user._id,
+      tokenHash,
+      type: "password_reset",
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      used: false,
+    });
+
+    try {
+      await forgotPassEmail(user.email, {
+        userId: user._id.toString(),
+        token: rawToken,
+      });
+    } catch (emailErr) {
+      console.error("Password reset email failed:", emailErr);
+
+      return sendRes(
+        res,
+        500,
+        false,
+        "Failed to send reset email. Please contact support."
+      );
+    }
+    return sendRes(
+      res,
+      200,
+      true,
+      "If an account exists for the provided details, a reset link has been sent to the registered email."
+    );
+  } catch (error) {
+    console.error("ForgotPass error:", error);
+    return sendRes(res, 500, false, "Internal server error");
+  }
+};
+
+// Reset Password Controller
+module.exports.resetPassword = async (req, res) => {
+  let { token, userId } = req.query;
+  let { newPassword } = req.body;
+
+  try {
+    if (!token || !userId || !newPassword) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "Invalid request !! Token, user id and new password are required."
+      );
+    }
+
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.ok) {
+      return sendRes(res, 400, false, pwCheck.reason);
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const tokenDoc = await Token.findOne({
+      userId,
+      tokenHash,
+      type: "password_reset",
+    });
+
+    if (!tokenDoc) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "Invalid or expired Password reset link."
+      );
+    }
+
+    // already used?
+    if (tokenDoc.used) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "This Password reset link has already been used."
+      );
+    }
+
+    // expired?
+    if (tokenDoc.expiresAt.getTime() < Date.now()) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "This Password reset link has expired. Please request a new one."
+      );
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return sendRes(res, 404, false, "User not found.");
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    // Mark token used and set consumedAt
+    tokenDoc.used = true;
+    tokenDoc.consumedAt = new Date();
+    await tokenDoc.save();
+
+    return sendRes(res, 200, true, "Password reset successfully.");
+  } catch (err) {
+    console.error("resetPassword error:", err);
+    return sendRes(res, 500, false, "Internal server error");
+  }
+};
+
+// Token-based user get controller
+module.exports.getCurrentUser = async (req, res) => {
+  try {
+    // AuthMiddleware has already verified token and attached req.user
+    if (!req.user) {
+      return sendRes(res, 401, false, "Not authenticated.");
+    }
+
+    return sendRes(res, 200, true, "User authenticated.", {
+      user: {
+        id: req.user._id,
+        username: req.user.username,
+        name: req.user.name,
+        email: req.user.email,
+        phone: req.user.phone,
+        role: req.user.role,
+        isVerified: req.user.isVerified,
+      },
+    });
+  } catch (err) {
+    console.error("getCurrentUser error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Logout Controller
+module.exports.Logout = async (req, res) => {
+  try {
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return sendRes(res, 200, true, "Logged out successfully.");
+  } catch (err) {
+    console.error("Logout error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Username update controller
+module.exports.updateUsername = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return sendRes(res, 401, false, "Not authenticated.");
+
+    const { username } = req.body;
+    if (typeof username !== "string" || !username.trim()) {
+      return sendRes(res, 400, false, "Username is required.");
+    }
+
+    const candidate = username.trim();
+
+    if (candidate === user.username) {
+      return sendRes(res, 200, true, "Username unchanged.", {
+        user: { id: user._id, username: user.username },
+      });
+    }
+
+    const exists = await User.findOne({
+      username: candidate,
+      _id: { $ne: user._id },
+    });
+
+    if (exists) return sendRes(res, 409, false, "Username already taken.");
+
+    user.username = candidate;
+    await user.save();
+
+    return sendRes(res, 200, true, "Username updated.", {
+      user: { id: user._id, username: user.username },
+    });
+  } catch (err) {
+    console.error("updateUsername error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Name update Controller
+module.exports.updateName = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return sendRes(res, 401, false, "Not authenticated.");
+
+    const { name } = req.body;
+    if (typeof name !== "string" || !name.trim()) {
+      return sendRes(res, 400, false, "Name is required.");
+    }
+
+    const newName = name.trim();
+
+    if (newName === user.name) {
+      return sendRes(res, 200, true, "Name unchanged.", {
+        name: user.name,
+      });
+    }
+
+    user.name = newName;
+    await user.save();
+
+    return sendRes(res, 200, true, "Name updated successfully.", {
+      name: user.name,
+    });
+  } catch (err) {
+    console.error("updateName error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Phone update controller
+module.exports.updatePhone = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return sendRes(res, 401, false, "Not authenticated.");
+
+    const { phone } = req.body;
+
+    if (phone === undefined) {
+      return sendRes(res, 400, false, "Phone is required.");
+    }
+
+    const newPhone = phone === "" ? undefined : String(phone).trim();
+
+    if (newPhone && !/^\+?\d{6,15}$/.test(newPhone)) {
+      return sendRes(res, 400, false, "Invalid phone format.");
+    }
+
+    if (String(user.phone || "") === String(newPhone || "")) {
+      return sendRes(res, 200, true, "Phone unchanged.", {
+        user: { id: user._id, phone: user.phone },
+      });
+    }
+
+    user.phone = newPhone;
+    await user.save();
+
+    return sendRes(res, 200, true, "Phone updated.", {
+      user: { id: user._id, phone: user.phone },
+    });
+  } catch (err) {
+    console.error("updatePhone error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Change password controller
+module.exports.changePassword = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return sendRes(res, 401, false, "Not authenticated.");
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "Current and new passwords are required."
+      );
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return sendRes(res, 401, false, "Current password is incorrect.");
+    }
+
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.ok) {
+      return sendRes(res, 400, false, pwCheck.reason);
+    }
+
+    const isSamePassword = await user.comparePassword(newPassword);
+    if (isSamePassword) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "New password must be different from the current password."
+      );
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return sendRes(res, 200, true, "Password changed successfully.");
+  } catch (err) {
+    console.error("changePassword error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Delete Account Controller
+module.exports.deleteAccount = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return sendRes(res, 401, false, "Not authenticated.");
+
+    const { currentPassword } = req.body;
+    if (!currentPassword) {
+      return sendRes(
+        res,
+        400,
+        false,
+        "Current password is required to delete account."
+      );
+    }
+
+    const match = await user.comparePassword(currentPassword);
+    if (!match)
+      return sendRes(res, 401, false, "Current password is incorrect.");
+
+    await Token.deleteMany({ userId: user._id });
+
+    await User.findByIdAndDelete(user._id);
+
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return sendRes(res, 200, true, "Account deleted successfully.");
+  } catch (err) {
+    console.error("deleteAccount error:", err);
+    return sendRes(res, 500, false, "Internal server error.");
   }
 };
