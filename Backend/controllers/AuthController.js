@@ -6,6 +6,8 @@ const { generateSecretToken } = require("../utils/secretToken");
 const sendVerificationEmail = require("../utils/sendVerificationEmail");
 const forgotPassEmail = require("../utils/forgotPassEmail");
 const { validatePassword } = require("../utils/validators");
+const { OAuth2Client } = require("google-auth-library");
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Registration Controller
 module.exports.SignUp = async (req, res) => {
@@ -269,7 +271,7 @@ module.exports.Login = async (req, res) => {
     if (username) username = username.trim();
 
     const query = email ? { email } : { username };
-    const user = await User.findOne(query);
+    const user = await User.findOne(query).select("+password");
 
     if (!user) {
       return sendRes(res, 401, false, "Invalid credentials.");
@@ -396,7 +398,8 @@ module.exports.ForgotPass = async (req, res) => {
 
 // Reset Password Controller
 module.exports.resetPassword = async (req, res) => {
-  let { token, userId } = req.query;
+  const { token, id } = req.query;
+  const userId = id;
   let { newPassword } = req.body;
 
   try {
@@ -634,7 +637,8 @@ module.exports.changePassword = async (req, res) => {
       );
     }
 
-    const isMatch = await user.comparePassword(currentPassword);
+    const userWithPassword = await User.findById(user._id).select("+password");
+    const isMatch = await userWithPassword.comparePassword(currentPassword);
     if (!isMatch) {
       return sendRes(res, 401, false, "Current password is incorrect.");
     }
@@ -644,7 +648,7 @@ module.exports.changePassword = async (req, res) => {
       return sendRes(res, 400, false, pwCheck.reason);
     }
 
-    const isSamePassword = await user.comparePassword(newPassword);
+    const isSamePassword = await userWithPassword.comparePassword(newPassword);
     if (isSamePassword) {
       return sendRes(
         res,
@@ -680,7 +684,8 @@ module.exports.deleteAccount = async (req, res) => {
       );
     }
 
-    const match = await user.comparePassword(currentPassword);
+    const userWithPassword = await User.findById(user._id).select("+password");
+    const match = await userWithPassword.comparePassword(currentPassword);
     if (!match)
       return sendRes(res, 401, false, "Current password is incorrect.");
 
@@ -699,5 +704,103 @@ module.exports.deleteAccount = async (req, res) => {
   } catch (err) {
     console.error("deleteAccount error:", err);
     return sendRes(res, 500, false, "Internal server error.");
+  }
+};
+
+// Google Auth Controller
+module.exports.googleAuth = async (req, res) => {
+  try {
+    const { token: idToken } = req.body;
+    if (!idToken) return sendRes(res, 400, false, "ID token is required.");
+
+    // Verify Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) return sendRes(res, 400, false, "Invalid ID token.");
+
+    const { sub: googleId, email, name, phone } = payload;
+
+    if (!email) {
+      return sendRes(res, 400, false, "Google account has no email.");
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await User.findOne({
+      $or: [{ googleId }, { email: normalizedEmail }],
+    });
+
+    // If found by email but googleId missing -> link account
+    if (user && !user.googleId) {
+      user.googleId = googleId;
+      if (!user.isVerified) user.isVerified = true;
+
+      // Save phone only if not already present
+      if (!user.phone && phone) user.phone = phone;
+
+      await user.save();
+    }
+
+    if (!user) {
+      // Generate username from email local part
+      const emailLocal = email.split("@")[0];
+      const baseUsername =
+        emailLocal.replace(/[^a-z0-9]/gi, "").toLowerCase() || "user";
+
+      let username = baseUsername;
+      let attempts = 0;
+
+      // Ensure username is unique (max 5 attempts)
+      while (attempts < 5) {
+        const exists = await User.findOne({ username });
+        if (!exists) break;
+
+        attempts++;
+        username = `${baseUsername}${Math.floor(Math.random() * 9000) + 1000}`;
+      }
+
+      // If STILL not unique -> fallback username
+      if (await User.findOne({ username })) {
+        username = `${baseUsername}${Date.now().toString().slice(-5)}`;
+      }
+
+      user = await User.create({
+        username,
+        email: normalizedEmail,
+        name: name || username,
+        googleId,
+        ...(phone ? { phone } : {}),
+        isVerified: true,
+      });
+    }
+
+    const token = generateSecretToken({ userId: user._id });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    return sendRes(res, 200, true, "Login via Google successful.", {
+      user: {
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (err) {
+    console.error("googleAuth error:", err);
+    return sendRes(res, 500, false, "Internal server error");
   }
 };

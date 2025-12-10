@@ -16,6 +16,11 @@ const UserSchema = new Schema(
       required: true,
       maxlength: 100,
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     email: {
       type: String,
       required: true,
@@ -26,11 +31,17 @@ const UserSchema = new Schema(
     },
     password: {
       type: String,
-      required: true,
       minlength: 8,
+      select: false,
+      required: function () {
+        return !this.googleId;
+      },
     },
     phone: {
-      type: Number,
+      type: String,
+      trim: true,
+      match: [/^\+?\d{6,15}$/, "Invalid phone format"],
+      sparse: true,
     },
     role: {
       type: String,
@@ -59,6 +70,7 @@ const UserSchema = new Schema(
 UserSchema.pre("save", async function (next) {
   try {
     if (!this.isModified("password")) return next();
+    if (!this.password) return next();
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     return next();
@@ -69,6 +81,7 @@ UserSchema.pre("save", async function (next) {
 
 // Compare entered password with stored hash here to simplfy controllers
 UserSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 

@@ -11,6 +11,7 @@ router.post("/login", AuthController.Login);
 router.post("/forgot-password", AuthController.ForgotPass);
 router.post("/reset-password", AuthController.resetPassword);
 router.post("/logout", AuthController.Logout);
+router.post("/google", AuthController.googleAuth);
 
 // Protected Route
 router.get("/me", AuthMiddleware, AuthController.getCurrentUser);
