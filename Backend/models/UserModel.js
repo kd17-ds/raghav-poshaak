@@ -66,11 +66,11 @@ const UserSchema = new Schema(
   }
 );
 
-// Hash password before saving (only when modified)
+// Hash password before saving
 UserSchema.pre("save", async function (next) {
   try {
-    if (!this.isModified("password")) return next();
-    if (!this.password) return next();
+    if (!this.isModified("password")) return next(); // if nothing changed in password field
+    if (!this.password) return next(); // in case of google auth where password is not set
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     return next();

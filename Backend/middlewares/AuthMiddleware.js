@@ -4,9 +4,10 @@ const sendRes = require("../utils/sendRes");
 
 module.exports.AuthMiddleware = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization; //cookies or authorization header
     let token = null;
 
+    // if token is in Authorization header or in cookies
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
     } else if (req.cookies && req.cookies.token) {
@@ -24,7 +25,6 @@ module.exports.AuthMiddleware = async (req, res, next) => {
       return sendRes(res, 401, false, "Invalid or expired token.");
     }
 
-    // Your token payload contains userId, not id
     const userId = decoded.userId;
     if (!userId) {
       return sendRes(res, 401, false, "Invalid token payload.");

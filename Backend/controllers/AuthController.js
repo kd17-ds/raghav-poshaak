@@ -54,7 +54,7 @@ module.exports.SignUp = async (req, res) => {
       name,
     });
 
-    // Create a secure random token (raw) and store its SHA-256 hash in DB
+    // Create a secure random token (raw) and store its SHA-256 hash in DB for email verification
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto
       .createHash("sha256")
@@ -68,6 +68,7 @@ module.exports.SignUp = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
+    // Send verification email
     try {
       await sendVerificationEmail(email, {
         userId: newUser._id.toString(),
@@ -271,7 +272,7 @@ module.exports.Login = async (req, res) => {
     if (username) username = username.trim();
 
     const query = email ? { email } : { username };
-    const user = await User.findOne(query).select("+password");
+    const user = await User.findOne(query).select("+password"); // include password for comparison
 
     if (!user) {
       return sendRes(res, 401, false, "Invalid credentials.");
@@ -366,7 +367,6 @@ module.exports.ForgotPass = async (req, res) => {
       tokenHash,
       type: "password_reset",
       expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      used: false,
     });
 
     try {
@@ -537,7 +537,7 @@ module.exports.updateUsername = async (req, res) => {
 
     const exists = await User.findOne({
       username: candidate,
-      _id: { $ne: user._id },
+      _id: { $ne: user._id }, // exclude current user
     });
 
     if (exists) return sendRes(res, 409, false, "Username already taken.");
@@ -710,7 +710,7 @@ module.exports.deleteAccount = async (req, res) => {
 // Google Auth Controller
 module.exports.googleAuth = async (req, res) => {
   try {
-    const { token: idToken } = req.body;
+    const { token: idToken } = req.body; // frontend sends google ID token as 'token'
     if (!idToken) return sendRes(res, 400, false, "ID token is required.");
 
     // Verify Google ID token
@@ -719,7 +719,7 @@ module.exports.googleAuth = async (req, res) => {
       audience: process.env.GOOGLE_CLIENT_ID,
     });
 
-    const payload = ticket.getPayload();
+    const payload = ticket.getPayload(); // google user info
     if (!payload) return sendRes(res, 400, false, "Invalid ID token.");
 
     const { sub: googleId, email, name, phone } = payload;
